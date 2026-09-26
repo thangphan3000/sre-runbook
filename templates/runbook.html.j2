@@ -1,0 +1,203 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ rb.title }} · SRE Runbooks{% endblock %}
+{% block content %}
+    <h1>{{ rb.title }}</h1>
+
+    <div class="metabar">
+      <span><strong>Owner:</strong> <code>{{ rb.owner }}</code></span>
+      <span class="sep">·</span>
+      <span><strong>Channel:</strong> <code>{{ rb.channel }}</code></span>
+      <span class="sep">·</span>
+      <span class="badge freshness" data-verified="{{ rb.last_verified }}">Verified</span>
+    </div>
+
+    {% if rb.severity_guide %}
+    <div class="admonition danger">
+      <div class="title">Severity guide</div>
+      <ul>
+        {% for s in rb.severity_guide %}
+        <li><span class="badge badge-{{ s.level | lower }}">{{ s.level }}</span> if {{ s.condition | safe }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if rb.checklist %}
+    <h2 id="quick-checklist">1. Quick checklist</h2>
+    <ul class="checklist has-check">
+      {% for item in rb.checklist %}
+      <li class="has-check"><input type="checkbox" /> {{ item | safe }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if rb.here_if or rb.not_here_if %}
+    <h2 id="right-runbook">2. Am I in the right runbook?</h2>
+    <div class="split">
+      <div class="card here">
+        <div class="title">You're here if</div>
+        <ul>
+          {% for item in rb.here_if %}
+          <li>{{ item | safe }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="card not-here">
+        <div class="title">You're NOT here if</div>
+        <ul>
+          {% for item in rb.not_here_if %}
+          <li>
+            {{ item.text | safe }}
+            {%- if item.link %} → <a href="{{ root }}{{ item.link }}.html">go to {{ item.link }}</a>{% endif -%}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if rb.detection %}
+    <h2 id="detection">3. Detection &amp; signals</h2>
+    <ul>
+      {% if rb.detection.alert %}
+      <li><strong>Alert:</strong> <code>{{ rb.detection.alert }}</code>
+        {%- if rb.detection.alert_query %} — <code>{{ rb.detection.alert_query }}</code>{% endif -%}
+      </li>
+      {% endif %}
+      {% if rb.detection.dashboards %}
+      <li><strong>Dashboards</strong> (open in order):
+        <ol>
+          {% for d in rb.detection.dashboards %}
+          <li><a href="{{ d.url }}" rel="noreferrer">{{ d.name }}</a>{% if d.note %} — {{ d.note | safe }}{% endif %}</li>
+          {% endfor %}
+        </ol>
+      </li>
+      {% endif %}
+      {% if rb.detection.slo %}<li><strong>SLO context:</strong> {{ rb.detection.slo | safe }}</li>{% endif %}
+      {% if rb.detection.false_positive %}<li><strong>False-positive shape:</strong> {{ rb.detection.false_positive | safe }}</li>{% endif %}
+    </ul>
+    {% endif %}
+
+    {% if rb.triage %}
+    <h2 id="triage">4. Triage — first 5 minutes</h2>
+    {% for step in rb.triage %}
+    <div class="step">
+      <div class="step-head">Step {{ loop.index }}: {{ step.name }}</div>
+      {% if step.command %}<pre><code>{{ step.command }}</code></pre>{% endif %}
+      {% if step.expected %}<div class="kv"><span class="k">Expected</span> {{ step.expected | safe }}</div>{% endif %}
+      {% if step.if_wrong %}<div class="kv"><span class="k">If wrong</span> {{ step.if_wrong | safe }}</div>{% endif %}
+      {% if step.prereq %}<div class="kv"><span class="k">Prereq</span> {{ step.prereq | safe }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if rb.mitigation %}
+    <h2 id="mitigation">5. Mitigation</h2>
+    <p>Least destructive first. Each entry lists <strong>precondition → command → verify → rollback</strong>.</p>
+
+    {% if rb.mitigation.safe %}
+    <h3>5.1 Safe / reversible</h3>
+    {% for m in rb.mitigation.safe %}
+    <div class="step">
+      <div class="step-head">{{ m.name }}</div>
+      {% if m.precondition %}<div class="kv"><span class="k">Precondition</span> {{ m.precondition | safe }}</div>{% endif %}
+      {% if m.command %}<div class="kv"><span class="k">Command</span><pre><code>{{ m.command }}</code></pre></div>{% endif %}
+      {% if m.verify %}<div class="kv"><span class="k">Verify</span> {{ m.verify | safe }}</div>{% endif %}
+      {% if m.rollback %}<div class="kv"><span class="k">Rollback</span> {{ m.rollback | safe }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if rb.mitigation.reversible %}
+    <h3>5.2 Impactful but reversible</h3>
+    {% for m in rb.mitigation.reversible %}
+    <div class="step">
+      <div class="step-head">{{ m.name }}</div>
+      {% if m.precondition %}<div class="kv"><span class="k">Precondition</span> {{ m.precondition | safe }}</div>{% endif %}
+      {% if m.command %}<div class="kv"><span class="k">Command</span><pre><code>{{ m.command }}</code></pre></div>{% endif %}
+      {% if m.verify %}<div class="kv"><span class="k">Verify</span> {{ m.verify | safe }}</div>{% endif %}
+      {% if m.rollback %}<div class="kv"><span class="k">Rollback</span> {{ m.rollback | safe }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if rb.mitigation.destructive %}
+    <h3>5.3 Destructive — requires 2nd approval</h3>
+    {% for m in rb.mitigation.destructive %}
+    <div class="admonition danger">
+      <div class="title">Destructive: {{ m.name }}</div>
+      <p>{{ m.warning | safe }}</p>
+    </div>
+    {% if m.dry_run %}<pre><code># DRY RUN — check blast radius first:
+{{ m.dry_run }}</code></pre>{% endif %}
+    {% if m.command %}<pre><code># Only after 2nd approval:
+{{ m.command }}</code></pre>{% endif %}
+    {% if m.rollback %}<p><strong>Rollback:</strong> {{ m.rollback | safe }}</p>{% endif %}
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+
+    {% if rb.verification %}
+    <h2 id="verification">6. Verification</h2>
+    <p>The incident is over when <strong>all</strong> of these hold for at least {{ rb.verification.hold_duration or "10 min" }}:</p>
+    <ul class="checklist has-check">
+      {% for c in rb.verification.checks %}
+      <li class="has-check"><input type="checkbox" /> {{ c | safe }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if rb.escape_hatch %}
+    <h2 id="escape">7. Rollback / escape hatch</h2>
+    <ol>
+      {% for step in rb.escape_hatch %}
+      <li>{{ step | safe }}</li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+
+    {% if rb.comms %}
+    <h2 id="comms">8. Communication templates</h2>
+    {% if rb.comms.initial %}<h3>Initial post</h3><pre><code>{{ rb.comms.initial }}</code></pre>{% endif %}
+    {% if rb.comms.update %}<h3>15-minute update</h3><pre><code>{{ rb.comms.update }}</code></pre>{% endif %}
+    {% if rb.comms.resolution %}<h3>Resolution</h3><pre><code>{{ rb.comms.resolution }}</code></pre>{% endif %}
+    {% endif %}
+
+    {% if rb.escalation %}
+    <h2 id="escalation">9. Escalation matrix</h2>
+    <table>
+      <thead><tr><th>Trigger</th><th>Who</th><th>How</th></tr></thead>
+      <tbody>
+        {% for e in rb.escalation %}
+        <tr>
+          <td>{{ e.trigger | safe }}</td>
+          <td>{{ e.who | safe }}</td>
+          <td>{{ e.how | safe }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if rb.related %}
+    <h2 id="related">10. Related</h2>
+    <ul>
+      {% for slug in rb.related.runbooks or [] %}
+      <li><a href="{{ root }}{{ slug }}.html">{{ slug }}</a></li>
+      {% endfor %}
+      {% for link in rb.related.links or [] %}
+      <li>{{ link.name }}: <a href="{{ link.url }}" rel="noreferrer">{{ link.url }}</a></li>
+      {% endfor %}
+      {% if rb.related.postmortems %}
+      <li>Prior postmortems:
+        {% for pm in rb.related.postmortems %}
+          <a href="{{ pm.url }}" rel="noreferrer">{{ pm.name }}</a>{% if not loop.last %}, {% endif %}
+        {% endfor %}
+      </li>
+      {% endif %}
+    </ul>
+    {% endif %}
+{% endblock %}
+{% block footer_right %}
+<span>Source: <code>runbooks/{{ rb._src }}</code> · last verified <span class="freshness" data-verified="{{ rb.last_verified }}"></span></span>
+{% endblock %}

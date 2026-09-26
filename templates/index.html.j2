@@ -1,0 +1,51 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ data.title }}{% endblock %}
+{% block content %}
+    <h1>{{ data.title }}</h1>
+    <p class="lede">{{ data.lede | safe }}</p>
+
+    <h2>Browse by system</h2>
+    <div class="cards">
+      {% for cat in data.categories %}
+      {% set items = grouped.get(cat.id, []) %}
+      {% if items %}
+      <a class="card" href="{{ items[0]._path }}">
+        <h3>{{ cat.name }}</h3>
+        <p>{{ cat.blurb }}</p>
+        <div class="status">{{ items | length }} runbook{% if items | length != 1 %}s{% endif %} · click for the first</div>
+      </a>
+      {% else %}
+      <div class="card">
+        <h3>{{ cat.name }}</h3>
+        <p>{{ cat.blurb }}</p>
+        <div class="status">Coming soon</div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if runbooks %}
+    <h2>All runbooks</h2>
+    <ul>
+      {% for rb in runbooks | sort(attribute='title') %}
+      <li><a href="{{ rb._path }}">{{ rb.title }}</a> — <span style="color: var(--muted)">{{ rb.snippet }}</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <h2>Anytime references</h2>
+    <ul>
+      {% for r in data.references %}
+      <li><a href="{{ r.url }}">{{ r.name }}</a> — {{ r.blurb | safe }}.</li>
+      {% endfor %}
+    </ul>
+
+    {% if data.tip %}
+    <div class="admonition">
+      <div class="title">First page every on-call reads</div>
+      <p>{{ data.tip | safe }}</p>
+    </div>
+    {% endif %}
+{% endblock %}
+{% block footer_left %}<span>SRE Runbooks · generated from YAML.</span>{% endblock %}
+{% block footer_right %}<span>Serve locally: <code>python3 -m http.server -d dist 8000</code></span>{% endblock %}

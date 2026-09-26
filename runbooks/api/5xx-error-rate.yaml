@@ -1,0 +1,168 @@
+title: "API 5xx error rate > 1%"
+owner: "@api-platform"
+channel: "#incident-api"
+last_verified: 2026-09-26
+tags: [api, 5xx, errors, deploy, rollback]
+snippet: "HTTP 5xx elevated. Check recent deploys, pod health, downstream dependencies. Rollback if deploy is suspect."
+
+severity_guide:
+  - level: SEV1
+    condition: '5xx > 10% for > 5 min, <strong>or</strong> any 5xx affecting checkout / payments.'
+  - level: SEV2
+    condition: '5xx > 1% for > 10 min across any region.'
+  - level: SEV3
+    condition: 'confined to one endpoint with < 1% overall traffic impact.'
+
+checklist:
+  - "Confirm the alert is real (§3)"
+  - "Check the last deploy — is it < 30 min old? (§4 Step 1)"
+  - "Rollback the deploy if suspect (§5.2)"
+  - "Post initial status update (§8)"
+  - "Escalate if > 15 min without progress (§9)"
+
+here_if:
+  - "<code>APIErrorRateHigh</code> alert fired in Alertmanager."
+  - 'Users report "internal server error" / 500 / 502 / 503 / 504.'
+  - "Overview dashboard's <em>5xx rate</em> panel is above 1%."
+
+not_here_if:
+  - text: "4xx spike (client errors) — check auth / rate-limit dashboards."
+  - text: "Latency high but 5xx normal"
+    link: "api/p99-latency-spike"
+  - text: "LB itself unhealthy (health checks failing at LB level)"
+    link: "infra/load-balancer-unhealthy"
+  - text: "DB connection errors dominate the logs"
+    link: "database/connection-pool-exhausted"
+
+detection:
+  alert: "APIErrorRateHigh"
+  alert_query: 'rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.01 for 5m'
+  dashboards:
+    - name: "API Overview"
+      url: "https://grafana.example.com/d/api-overview"
+      note: "top-line 5xx rate + latency"
+    - name: "API by Endpoint"
+      url: "https://grafana.example.com/d/api-by-endpoint"
+      note: "which endpoint is failing"
+    - name: "Deploys"
+      url: "https://grafana.example.com/d/deploys"
+      note: "recent deploy annotations"
+  slo: "Monthly budget 99.9% success. 1h burn rate > 14.4 → upgrade to SEV1."
+  false_positive: "A single pod OOM-killed and restarted cleanly within 2 min while error rate briefly touched 1.1%. Close out if 5xx < 0.5% for 10 min and no new pods are unhealthy."
+
+triage:
+  - name: "Recent deploys"
+    command: "kubectl -n api rollout history deploy/api | tail -5"
+    expected: "Most recent revision is > 30 min old."
+    if_wrong: 'Deploy < 30 min old — treat the deploy as prime suspect. Go to <a href="#mitigation">§5.2</a>.'
+    prereq: "<code>kubectl</code> context = <code>prod-us-east-1</code>. If not: <code>aws eks update-kubeconfig --name prod-cluster --region us-east-1</code>."
+
+  - name: "Pod health"
+    command: "kubectl -n api get pods -o wide"
+    expected: "All pods <code>Running</code>, <code>READY 1/1</code>, <code>RESTARTS</code> unchanged in last 10 min."
+    if_wrong: 'Pods restarting or <code>CrashLoopBackOff</code>. Grab logs (<code>kubectl -n api logs &lt;pod&gt; --previous | tail -100</code>) and apply <a href="#mitigation">§5.1</a>.'
+
+  - name: "Downstream dependencies"
+    command: "curl -s https://api.example.com/internal/health | jq"
+    expected: 'Every <code>dependency.status</code> = <code>"ok"</code>.'
+    if_wrong: 'A DB dependency is <code>"degraded"</code> or <code>"down"</code> — stop here, this is downstream. Go to the DB runbook.'
+
+  - name: "Error shape"
+    command: 'open "https://grafana.example.com/d/api-by-endpoint"'
+    expected: "Concentrated on one endpoint → code-path (deploy or feature-flag) issue. Spread across all endpoints → infra (DB, LB, network, node)."
+    if_wrong: "Use the shape to choose between §5.1 (safe) and §5.2 (rollback)."
+
+mitigation:
+  safe:
+    - name: "Restart affected pods"
+      precondition: "One or more pods <code>CrashLoopBackOff</code> or <code>RESTARTS</code> climbing every minute."
+      command: "kubectl -n api rollout restart deploy/api"
+      verify: 'kubectl -n api rollout status deploy/api --timeout=180s — then watch <a href="https://grafana.example.com/d/api-overview">API Overview</a>: 5xx should drop within 3 min.'
+      rollback: "None needed; idempotent."
+
+    - name: "Disable the suspect feature flag"
+      precondition: '5xx concentrated on one endpoint AND a flag was flipped in the last 24h (check <a href="https://flags.example.com/audit">flag audit log</a>).'
+      command: "flagcli set <flag-name> --env prod --value false"
+      verify: '<a href="https://grafana.example.com/d/api-by-endpoint">API by Endpoint</a> — the affected endpoint returns to baseline in 1–2 min.'
+      rollback: "Flip the flag back on with the same command."
+
+  reversible:
+    - name: "Rollback the last deploy"
+      precondition: "Recent deploy correlates with error onset (Triage Step 1) AND the previous revision is known-good."
+      command: |
+        kubectl -n api rollout undo deploy/api
+        kubectl -n api rollout status deploy/api --timeout=180s
+      verify: '5xx rate on <a href="https://grafana.example.com/d/api-overview">API Overview</a> drops below 0.5% within 5 min.'
+      rollback: "kubectl -n api rollout undo deploy/api --to-revision=&lt;N&gt; where &lt;N&gt; is the revision you just rolled back from. Only if the rollback made things worse."
+
+  destructive:
+    - name: "Force-scale to zero and re-deploy"
+      warning: "Get a second engineer on the call. This <em>will</em> cause a full outage for 60–120 seconds. Only if all pods are corrupted (e.g. a bad ConfigMap propagated) and normal rollout does not clear it."
+      dry_run: |
+        kubectl -n api get deploy/api -o json \
+          | jq '{replicas: .spec.replicas, revision: .metadata.annotations["deployment.kubernetes.io/revision"]}'
+      command: |
+        kubectl -n api scale deploy/api --replicas=0
+        kubectl -n api scale deploy/api --replicas=<original>
+      rollback: "Not reversible mid-execution. If it makes things worse, apply the previous known-good manifest from <code>infra/api/deploy.yaml</code> in the platform repo and <code>kubectl apply -f</code> it."
+
+verification:
+  hold_duration: "10 min"
+  checks:
+    - '5xx rate on <a href="https://grafana.example.com/d/api-overview">API Overview</a> < 0.5%.'
+    - "<code>APIErrorRateHigh</code> auto-resolved in Alertmanager."
+    - "Zero <code>CrashLoopBackOff</code> pods: <code>kubectl -n api get pods | grep -c CrashLoop</code> returns <code>0</code>."
+    - "No new user reports in <code>#support</code> for 10 min."
+
+escape_hatch:
+  - "If you rolled back a deploy and it worsened: <code>kubectl -n api rollout undo deploy/api --to-revision=&lt;original&gt;</code>."
+  - "If you toggled a flag: flip it to the state it was in before you touched it (the flag console shows history)."
+  - "Page the secondary on-call (§9)."
+
+comms:
+  initial: |
+    :rotating_light: Investigating elevated 5xx errors on api.example.com.
+    Impact: some users seeing 500s, roughly <X>% of traffic affected.
+    Investigating: checking recent deploys and pod health.
+    Next update in 15 minutes.
+
+  update: |
+    Update on API 5xx incident:
+    Status: Mitigating.
+    Action: rolled back deploy <rev-hash> at <time>.
+    5xx trending down — currently <Y>%.
+    Next update in 15 minutes.
+
+  resolution: |
+    :white_check_mark: API 5xx incident resolved at <time>.
+    Root cause (initial): bad release in deploy <rev-hash> — rolled back.
+    Impact window: <start> – <end> (~<duration>).
+    Postmortem to follow within 5 business days.
+
+escalation:
+  - trigger: "Still SEV2 after 15 min with no mitigation attempted"
+    who: "API platform secondary"
+    how: "PagerDuty policy <code>api-platform-secondary</code>"
+  - trigger: "Upgraded to SEV1 (5xx > 10% or checkout affected)"
+    who: "Incident commander on-call"
+    how: "PagerDuty <code>ic-oncall</code> + <code>#incident-command</code>"
+  - trigger: "Suspected data loss / bad writes"
+    who: "Data lead + Eng manager"
+    how: "PagerDuty + Slack DM"
+  - trigger: "Security implications (auth 5xx spike, unexpected 401→500)"
+    who: "Security on-call"
+    how: "PagerDuty <code>security-oncall</code>"
+
+related:
+  runbooks:
+    - "database/connection-pool-exhausted"
+    - "infra/load-balancer-unhealthy"
+    - "api/deploy-rollback"
+  links:
+    - name: "API service architecture"
+      url: "https://wiki.example.com/api-architecture"
+  postmortems:
+    - name: "PM-2026-08 bad release"
+      url: "https://wiki.example.com/pm/2026-08"
+    - name: "PM-2026-05 config propagation"
+      url: "https://wiki.example.com/pm/2026-05"

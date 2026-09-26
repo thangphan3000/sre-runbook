@@ -1,0 +1,48 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ data.title }} · SRE Runbooks{% endblock %}
+{% block content %}
+    <h1>{{ data.title }}</h1>
+    <p class="lede">{{ data.lede | safe }}</p>
+
+    <table>
+      <thead>
+        <tr><th>Severity</th><th>Impact</th><th>Response time</th><th>Examples</th></tr>
+      </thead>
+      <tbody>
+        {% for lv in data.levels %}
+        <tr>
+          <td><span class="badge badge-{{ lv.level | lower }}">{{ lv.level }}</span></td>
+          <td>{{ lv.impact | safe }}</td>
+          <td><strong>{{ lv.response_time }}</strong></td>
+          <td>{{ lv.examples | safe }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Response-time targets</h2>
+    <p>{{ data.response_note | safe }}</p>
+
+    <h2>Communication cadence by severity</h2>
+    <table>
+      <thead>
+        <tr><th>Severity</th><th>Public status updates</th><th>Internal channel updates</th></tr>
+      </thead>
+      <tbody>
+        {% for c in data.cadence %}
+        <tr><td>{{ c.sev }}</td><td>{{ c.public }}</td><td>{{ c.internal }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>When to upgrade</h2>
+    <p>Upgrade the moment <strong>any</strong> of these becomes true:</p>
+    <ul>
+      {% for u in data.upgrade_when %}
+      <li>{{ u | safe }}</li>
+      {% endfor %}
+    </ul>
+
+    <h2>When to downgrade</h2>
+    <p>{{ data.downgrade_when | safe }}</p>
+{% endblock %}

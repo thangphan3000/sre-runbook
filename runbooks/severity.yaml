@@ -1,0 +1,47 @@
+title: "Severity levels"
+snippet: "Impact bands, response-time targets, comms cadence, upgrade/downgrade rules."
+tags: [severity, sev1, sev2, sev3, sev4, reference]
+
+lede: "Pick the severity from <strong>current blast radius</strong>, not the alert name. Downgrade or upgrade as facts change during the incident."
+
+levels:
+  - level: SEV1
+    impact: "Complete outage, data loss, security breach"
+    response_time: "15 min"
+    examples: "Production down; primary DB unreachable; data corruption confirmed"
+  - level: SEV2
+    impact: "Major degradation of a critical feature"
+    response_time: "30 min"
+    examples: "Checkout failing for a region; login flow broken; deploy pipeline down"
+  - level: SEV3
+    impact: "Minor impact, workaround available"
+    response_time: "2 hours"
+    examples: "Non-critical bug; latency degraded but under SLO; one non-primary region"
+  - level: SEV4
+    impact: "Cosmetic or long-tail impact"
+    response_time: "Next business day"
+    examples: "Typo in UI; stale dashboard; low-signal alert flap"
+
+response_note: "Response time is <strong>first acknowledgement</strong>, not resolution. If you have not touched the page within the window above, you have missed the target."
+
+cadence:
+  - sev: SEV1
+    public: "Every 15 min"
+    internal: "Every 15 min, even if no news"
+  - sev: SEV2
+    public: "Every 30 min"
+    internal: "Every 30 min"
+  - sev: SEV3
+    public: "On status change"
+    internal: "On status change"
+  - sev: SEV4
+    public: "On resolution"
+    internal: "On resolution"
+
+upgrade_when:
+  - "Blast radius grew (more users, more services, more regions)."
+  - "You have been at the current severity for &gt; 2× the response-time target without mitigation."
+  - "Data loss or corruption is suspected — always upgrade to SEV1 pending investigation."
+  - "A customer-visible outage exceeds 30 min."
+
+downgrade_when: 'Only after <strong>verification</strong> (see each runbook''s Verification section) has held for at least one full alerting window. Do not downgrade because "it looks better".'

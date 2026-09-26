@@ -1,0 +1,26 @@
+title: "SRE Runbooks"
+lede: 'You are paged. Type the symptom into search (press <kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>K</kbd>) and open the top result. If search does not find it, browse by system below.'
+
+categories:
+  - id: api
+    name: "API / Web services"
+    blurb: "HTTP 5xx, latency spikes, deploy rollbacks, TLS."
+  - id: database
+    name: "Database"
+    blurb: "Connection pools, replication lag, disk, failover."
+  - id: infra
+    name: "Infrastructure / Cloud"
+    blurb: "Node failures, load balancers, DNS, IAM."
+  - id: pipelines
+    name: "Data pipelines"
+    blurb: "Stuck jobs, backlog, data quality, upstream outages."
+
+references:
+  - name: "Severity levels (SEV1–SEV4)"
+    url: "severity.html"
+    blurb: "impact bands and response-time targets"
+  - name: "Runbook template"
+    url: "https://github.com/YOURORG/sre-runbook/blob/main/runbooks/_template.yaml"
+    blurb: "copy this YAML file when writing a new runbook"
+
+tip: 'If you have never been paged before, read <a href="severity.html">Severity levels</a> once cold. During an incident there is no time to look up what SEV1 means.'

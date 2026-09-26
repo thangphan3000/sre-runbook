@@ -1,0 +1,150 @@
+# ============================================================================
+# Runbook YAML template.
+#
+# To add a new runbook:
+#   1. cp runbooks/_template.yaml runbooks/<category>/<slug>.yaml
+#      Categories: api, database, infra, pipelines (create the dir if new)
+#   2. Fill in every [PLACEHOLDER] below (grep for '\[' to find them).
+#   3. Delete sections that don't apply, add more items to lists that need them.
+#   4. Run:  python3 build.py
+#
+# Everything below is either a scalar (title, owner), a list, or a multi-line
+# string. Inline HTML is allowed in ANY text field (rendered as-is via | safe)
+# — use it for links and inline <code>.
+# ============================================================================
+
+# --- Metadata (also used to build the search index) ---
+title: "[Symptom the responder sees, e.g. API 5xx error rate > 1%]"
+owner: "[@team-handle]"
+channel: "[#incident-service]"
+last_verified: 2026-09-26                    # YYYY-MM-DD; badge auto-colours by age
+tags: [category, keyword1, keyword2]         # what someone would type into search
+snippet: "One line that answers 'is this the right runbook?'."
+
+# --- Severity guide (§0, above the fold) ---
+severity_guide:
+  - level: SEV1
+    condition: "[when to call this SEV1]"
+  - level: SEV2
+    condition: "[when to call this SEV2]"
+  - level: SEV3
+    condition: "[when to call this SEV3]"
+
+# --- Quick checklist (§1) ---
+# 3–6 items. Mirrors the section numbers below.
+checklist:
+  - "Confirm the alert is real (§3)"
+  - "[first triage step] (§4)"
+  - "[first mitigation] (§5)"
+  - "Post initial status update (§8)"
+  - "Escalate if > 15 min without progress (§9)"
+
+# --- Am I in the right runbook? (§2) ---
+here_if:
+  - "[symptom 1]"
+  - "[symptom 2]"
+not_here_if:
+  - text: "[symptom X]"
+    link: "[category/other-runbook-slug]"    # optional; omit to skip the link
+  - text: "[symptom Y]"
+
+# --- Detection & signals (§3) ---
+detection:
+  alert: "[AlertName]"
+  alert_query: "[promql or the SQL check that fires this]"
+  dashboards:
+    - name: "[Overview dashboard]"
+      url: "https://..."
+      note: "top-line signal"
+    - name: "[Service-specific dashboard]"
+      url: "https://..."
+  slo: "[SLO context, e.g. monthly 99.9%; 1h burn > 14.4 → SEV1]"
+  false_positive: "[what a benign firing looks like — close out fast]"
+
+# --- Triage — first 5 minutes (§4) ---
+# Each step: command + expected + if_wrong (+ optional prereq).
+triage:
+  - name: "[what you're checking]"
+    command: "[command]"
+    expected: "[exact output or metric]"
+    if_wrong: "[what to do — usually a §5 link]"
+    prereq: "[optional: prereq + fix command]"
+
+  - name: "[next check]"
+    command: "[command]"
+    expected: "[…]"
+    if_wrong: "[…]"
+
+# --- Mitigation, ordered by blast radius (§5) ---
+mitigation:
+  safe:                                       # reversible, low-risk
+    - name: "[action]"
+      precondition: "[when it applies]"
+      command: "[command]"
+      verify: "[how to confirm it worked]"
+      rollback: "[what to do if it made things worse]"
+
+  reversible:                                 # impactful but undoable
+    - name: "[action]"
+      precondition: "[…]"
+      command: "[…]"
+      verify: "[…]"
+      rollback: "[…]"
+
+  destructive:                                # requires 2nd approval
+    - name: "[action]"
+      warning: "Get a second engineer on the call. [what this will do]."
+      dry_run: "[command to check the blast radius first]"
+      command: "[the destructive command]"
+      rollback: "[explicit recovery, or 'not reversible' + escalation]"
+
+# --- Verification (§6) ---
+verification:
+  hold_duration: "10 min"
+  checks:
+    - "[metric X] on [dashboard] < [threshold]"
+    - "[alert name] auto-resolved"
+    - "[user-facing check] for 10 min"
+
+# --- Escape hatch (§7) ---
+escape_hatch:
+  - "[first undo]"
+  - "[second undo]"
+  - "Page secondary on-call (§9)"
+
+# --- Communication templates (§8) ---
+comms:
+  initial: |
+    :rotating_light: Investigating [symptom] in [service].
+    Impact: [what users see], ~[% of traffic].
+    Investigating: [what you're doing now].
+    Next update in 15 minutes.
+
+  update: |
+    Update on [service] incident:
+    Status: [Investigating | Mitigating | Monitoring].
+    Action: [what changed since last update].
+    Next update in 15 minutes.
+
+  resolution: |
+    :white_check_mark: [service] incident resolved.
+    Root cause (initial): [one line].
+    Impact window: [start] – [end].
+    Postmortem to follow within 5 business days.
+
+# --- Escalation matrix (§9) ---
+escalation:
+  - trigger: "[trigger, e.g. still SEV1 after 15 min]"
+    who: "[secondary on-call]"
+    how: "[PagerDuty policy or channel]"
+
+# --- Related (§10) ---
+related:
+  runbooks:                                   # slugs; resolved to hrefs at build
+    - "[category/sibling-slug]"
+  links:
+    - name: "Architecture diagram"
+      url: "https://..."
+  postmortems:
+    - name: "PM-YYYY-MM [title]"
+      url: "https://..."
