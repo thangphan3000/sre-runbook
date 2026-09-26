@@ -4,6 +4,14 @@ A tiny static-site generator for incident runbooks. Write YAML, run `python3 bui
 
 Built for one reader: **a solo on-call engineer paged at 3 AM.** Every design choice — the "am I in the right runbook?" split, the fold-content limit, the freshness badge, sticky search — defers to that.
 
+## Contents
+
+- [Quick start](#quick-start)
+- [Adding a new runbook](#adding-a-new-runbook)
+- [What each runbook page shows](#what-each-runbook-page-shows)
+- [Repo layout](#repo-layout)
+- [Design notes worth knowing](#design-notes-worth-knowing)
+
 ## Quick start
 
 ```sh
